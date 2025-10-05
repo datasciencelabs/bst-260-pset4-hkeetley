@@ -46,11 +46,9 @@ request <- request(url) |>
     'for' = "state:*",
     key = census_key 
   )  
-request
 ```
 
 3. Make a request to the US Census API using the `request` object. Save the response to and object named `response`. Check the response status of your request and make sure it was successful. You can learn about _status codes_ [here](https://en.wikipedia.org/wiki/List_of_HTTP_status_codes).
-
 
 ```{r}
 response <- request |> 
@@ -89,13 +87,14 @@ population1 <- population |>
     names_to="year", 
     values_to="population"
   ) |>
-  mutate(year = gsub("POP_", "", year)) |>
-  mutate(year=as.numeric(year))|>
-  mutate(population=as.numeric(population)) |>
-  mutate(state_abb = case_when(state_name=="Puerto Rico"~ "PR",
-                               state_name=="District of Columbia" ~ "DC",
-                               TRUE~state.abb[match(state_name, state.name)]))
-  
+    mutate(
+    year = as.numeric(gsub("POP_", "", year)),
+    population = as.numeric(population),
+    state_abb = case_when(
+      state_name == "Puerto Rico" ~ "PR",
+      state_name == "District of Columbia" ~ "DC",
+      TRUE ~ state.abb[match(state_name, state.name)])
+    )
   
   
   
@@ -159,10 +158,7 @@ regions <- map_df(seq_len(nrow(regions)), function(i) {
     region = regions$region[i],
     region_name = regions$region_name[i]
   )
-})
-
-
-regions <- regions %>%
+}) |>
   mutate(region_name = if_else(
     region_name == "New York and New Jersey, Puerto Rico, Virgin Islands",
     "NY/NJ and PR/VI",
@@ -174,7 +170,7 @@ regions <- regions %>%
 9. Add a region and region name columns to the `population` data frame.
 
 ```{r}
-population <- population1 %>% 
+population <- population1 |>
   left_join(regions, by = "state_name")
   
 ```
@@ -204,10 +200,10 @@ resp <- request(api) |>
   req_url_query(`$limit` = 1000000) |>  
   req_perform()
 
-cases_raw <- resp |> resp_body_json(simplifyVector = TRUE) %>% 
-  select(state, start_date, tot_cases, new_cases) %>% 
-  rename(date=start_date) %>% 
-  mutate(date = ymd_hms(date)) %>%
+cases_raw <- resp |> resp_body_json(simplifyVector = TRUE) |>
+  select(state, end_date, tot_cases, new_cases) |>
+  rename(date=end_date) |> 
+  mutate(date = ymd_hms(date)) |>
   mutate(tot_cases=as.numeric(tot_cases),
          new_cases=as.numeric(new_cases))
   
@@ -218,21 +214,27 @@ cases_raw <- resp |> resp_body_json(simplifyVector = TRUE) %>%
 12. For 2020 and 2021, make a time series plot of cases per 100,000 versus time for each state. Stratify the plot by region name. Make sure to label you graph appropriately. 
 
 ```{r}
-cases <- cases_raw %>%
-  mutate(year = year(date)) %>%              
-  filter(year %in% c(2020, 2021)) %>%
+cases <- cases_raw |>
+  mutate(year = year(date)) |>              
+  filter(year %in% c(2020, 2021)) |>
   left_join(population, 
-            by = c("state" = "state_abb", "year" = "year")) %>%   
+            by = c("state" = "state_abb", "year" = "year")) |>   
   mutate(
     cases_per_100000 = new_cases / population * 100000,
     state = as.character(state),
     region = as.character(region)             
-  ) %>%
+  ) |>
   filter(!is.na(state), !is.na(date), !is.na(new_cases), !is.na(region_name))
 
 ggplot(cases, aes(x=date, y=cases_per_100000, col = state)) +
   geom_line() + 
-  facet_wrap(~region_name)
+  facet_wrap(~region_name) +
+  labs(
+  title = "COVID-19 Cases per 100,000 by State and Region",
+  x = "Date",
+  y = "Cases per 100,000",
+  color = "State"
+)
 ```
 
 13. The dates in the `cases` dataset are stored as character strings. Use the **lubridate** package to properly parse the `date` column, then create a summary table showing the total COVID-19 cases by month and year for 2020 and 2021. The table should have columns for year, month (as month name), and total cases across all states. Order by year and month. Use the **knitr** package and `kable()` function to display the results as a formatted table.
@@ -243,7 +245,7 @@ cases |>
   mutate(
     year= year(date),
     month = month(date)) |> 
-  group_by(year, month) %>% 
+  group_by(year, month) |>
   summarise(total=sum(tot_cases)) |>
   kable()
 ```
@@ -265,12 +267,12 @@ resp <- request(deaths_url) |>
 ```
 
 ```{r}
-deaths <- resp |> resp_body_json(simplifyVector = TRUE) %>%
-  select(state, date = end_date, deaths = covid_19_deaths) %>% 
-  filter(state %in% c(state.name, "District of Columbia", "Puerto Rico")) %>%
-  mutate(date = ymd_hms(date)) %>%
-  mutate(deaths=as.numeric(deaths)) %>% 
-  group_by(state) %>%
+deaths <- resp |> resp_body_json(simplifyVector = TRUE) |>
+  select(state, date = end_date, deaths = covid_19_deaths) |>
+  filter(state %in% c(state.name, "District of Columbia", "Puerto Rico")) |>
+  mutate(date = ymd_hms(date)) |>
+  mutate(deaths=as.numeric(deaths)) |> 
+  group_by(state) |>
   summarise(total_deaths=sum(deaths, na.rm = TRUE))
 ```
 
